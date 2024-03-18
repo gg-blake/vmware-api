@@ -1,0 +1,11 @@
+Start VMWare API:
+cd C:\Users\Blake\certs
+vmrest -c .\vmware-crt.pem -k .\vmware-key.pem
+
+Start A Localhost:3000 Tunnel And Return Url as JSON Object:
+ssh -R 80:localhost:3000 nokey@localhost.run -- --output json
+
+Access SAPC SSH Client Without User Interaction and Run Custom Bash Script:
+plink -batch 192.168.176.128 -l tuser -pw cs444 ./update.sh
+
+
