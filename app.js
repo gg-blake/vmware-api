@@ -1,5 +1,6 @@
 const express = require('express');
 const request = require('request');
+const fetch = require('node-fetch');
 const child_process = require('child_process');
 require('dotenv').config({path: "./.env"});
 process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'
@@ -13,62 +14,85 @@ app.listen(PORT, () => {
     console.log("Server Listening on PORT:", PORT);
 });
 
-async function changeTutorState(options) {
-    request(options, function (error, response) {
-        if (error) {
-            console.log(options);
-            throw new Error(error);
-            return {
-                "status": 503,
-                "message": "Service Unavailable",
-                "body": response
-            }
-        }
-    })
-    return {
-        "status": 200,
-        "message": "Tutor Shutdown"
-    }
-} 
-
-async function restartTutor() {
-    var options = {
+/*
+let options = {
         'method': 'PUT',
-        'url': `https://127.0.0.1:8697/api/vms/${process.env.VMWARE_tutor_id}/power`,
+        'url': `https://127.0.0.1:8697/api/vms/${tutor_id}/power`,
         'headers': {
             'Content-Type': 'application/vnd.vmware.vmw.rest-v1+json',
             'Accept': 'application/vnd.vmware.vmw.rest-v1+json',
             'Authorization': `Basic ${process.env.VMWARE_auth}`
         },
         body: JSON.stringify({
-            "operation": "on"
+            "operation": "off"
         })
-      
     };
-    var shutdownResponse = await changeTutorState(options);
-    options.body = "on";
-    var startupResponse = await changeTutorState(options);
-    return {
-        shutdownResponse,
-        startupResponse
-    }
-}
+*/
 
-app.get('/restart-tutor', async (request, response) => {
-    var { shutdownResponse, startupResponse } = await restartTutor();
+app.get('/setup', (request, response) => {
+    const options ={
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/vnd.vmware.vmw.rest-v1+json',
+            'Accept': 'application/vnd.vmware.vmw.rest-v1+json',
+            'Authorization': `Basic ${process.env.VMWARE_auth}`
+        },
+    };
 
-    if (shutdownResponse.status !== 200 || startupResponse.status !== 200) {
+    var ssh = new Promise((resolve, reject) => {
+        try {
+            var child = child_process.spawnSync(`start cmd.exe /K plink -batch ${process.env.SSH_host} -l ${process.env.SSH_user} -pw ${process.env.SSH_password} ./update.sh`);
+            resolve();
+        } catch (error) {
+            reject(error);
+        }
+    })
+
+    ssh.then(() => fetch("http://127.0.0.1:8697/api/vms", options))
+    .then((res) => res.json())
+    .then((json) => new Promise((resolve, reject) => {
+        var tutor_id = json[1].id;
+
+        const put_options = {
+            'method': 'PUT',
+            'headers': {
+                'Content-Type': 'application/vnd.vmware.vmw.rest-v1+json',
+                'Accept': 'application/vnd.vmware.vmw.rest-v1+json',
+                'Authorization': `Basic ${process.env.VMWARE_auth}`
+            },
+            body: "shutdown"
+          
+        };
+
+        const shutdown = fetch(`http://127.0.0.1:8697/api/vms/${tutor_id}/power`, put_options)
+        .then((res) => res.json());
+
+        put_options.body = "on";
+        
+        const startup = shutdown.then((json) => fetch(`http://127.0.0.1:8697/api/vms/${tutor_id}/power`, put_options)).then((res) => res.json())
+        .then((json) => resolve(json))
+        .catch((error) => reject(error))
+    }))
+    .then((json) => {
+        console.log("Tutor Restarted");
+        response.status(200).send({
+            "status": 200,
+            "message": "Tutor Restarted"
+        });
+    })
+    .then(() => {
+        child.stdin.write("\n");
+    })
+    .catch((error) => {
+        console.log("[ERROR]: ", error);
         response.status(503).send({
             "status": 503,
             "message": "Service Unavailable"
         });
-        return;
-    }
-    response.status(200).send({
-        "status": 200,
-        "message": "Tutor Restarted"
     });
-})
+});
+
+
 
 app.get('/ssh', async (request, response) => {
     // If you get a permission denied error, you need to go to the vserver and type "ssh-copy-id bmoody25@users.cs.umb.edu" and enter your password
