@@ -1,5 +1,4 @@
 const express = require('express');
-const request = require('request');
 const fetch = require('node-fetch');
 const child_process = require('child_process');
 require('dotenv').config({path: "./.env"});
@@ -13,21 +12,6 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log("Server Listening on PORT:", PORT);
 });
-
-/*
-let options = {
-        'method': 'PUT',
-        'url': `https://127.0.0.1:8697/api/vms/${tutor_id}/power`,
-        'headers': {
-            'Content-Type': 'application/vnd.vmware.vmw.rest-v1+json',
-            'Accept': 'application/vnd.vmware.vmw.rest-v1+json',
-            'Authorization': `Basic ${process.env.VMWARE_auth}`
-        },
-        body: JSON.stringify({
-            "operation": "off"
-        })
-    };
-*/
 
 app.get('/setup', (request, response) => {
     const options ={
